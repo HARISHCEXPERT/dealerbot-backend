@@ -7,40 +7,59 @@ const BACKEND_URL = process.env.BACKEND_URL;
 
 // ✅ Step 1: Meta callback
 const metaCallback = async (req, res) => {
-  const { code, state: clientId } = req.query; // state se clientId lo
+  const { code, state: clientId } = req.query;
 
   if (!code || !clientId) {
     return res.status(400).json({ error: "code aur clientId dono chahiye" });
   }
 
   try {
+    // Code ko access token mein exchange karo
     const tokenRes = await axios.get("https://graph.facebook.com/v19.0/oauth/access_token", {
       params: {
         client_id: APP_ID,
         client_secret: APP_SECRET,
         code: code,
-        redirect_uri: `${BACKEND_URL}/api/auth/meta/callback` // clean URL — no query params
+        redirect_uri: `${BACKEND_URL}/api/auth/meta/callback`
       }
     });
 
     const accessToken = tokenRes.data.access_token;
 
-    const wabaRes = await axios.get("https://graph.facebook.com/v19.0/me/whatsapp_business_accounts", {
+    // Business ID fetch karo
+    const bizRes = await axios.get("https://graph.facebook.com/v19.0/me/businesses", {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
+
+    const businessId = bizRes.data?.data?.[0]?.id;
+
+    if (!businessId) {
+      console.error("No business found:", bizRes.data);
+      return res.status(400).json({ error: "Facebook Business account nahi mila" });
+    }
+
+    // WABA ID fetch karo business se
+    const wabaRes = await axios.get(
+      `https://graph.facebook.com/v19.0/${businessId}/owned_whatsapp_business_accounts`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
 
     const wabaId = wabaRes.data?.data?.[0]?.id;
 
     if (!wabaId) {
+      console.error("No WABA found:", wabaRes.data);
       return res.status(400).json({ error: "WhatsApp Business Account nahi mila" });
     }
 
-    const phoneRes = await axios.get(`https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`, {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
+    // Phone number ID fetch karo
+    const phoneRes = await axios.get(
+      `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
 
     const phoneId = phoneRes.data?.data?.[0]?.id;
 
+    // Client update karo
     const updatedClient = await Client.findByIdAndUpdate(clientId, {
       whatsapp: {
         metaAccessToken: accessToken,
@@ -55,6 +74,7 @@ const metaCallback = async (req, res) => {
     }
 
     res.redirect(`${process.env.FRONTEND_URL}/onboard-success?clientId=${clientId}`);
+
   } catch (err) {
     console.error("Meta callback error:", err?.response?.data || err.message);
     res.redirect(`${process.env.FRONTEND_URL}/onboard-error?clientId=${clientId}`);
@@ -90,7 +110,7 @@ const getOnboardStatus = async (req, res) => {
   }
 };
 
-// ✅ Step 3: Onboard URL — state mein clientId pass karo
+// ✅ Step 3: Onboard URL
 const getOnboardUrl = async (req, res) => {
   const { clientId } = req.params;
 
@@ -106,7 +126,7 @@ const getOnboardUrl = async (req, res) => {
       `&redirect_uri=${redirectUri}` +
       `&scope=whatsapp_business_management,whatsapp_business_messaging` +
       `&response_type=code` +
-      `&state=${clientId}` +  // clientId state mein
+      `&state=${clientId}` +
       `&config_id=2152842675495716`;
 
     res.json({ onboardUrl, clientId });
