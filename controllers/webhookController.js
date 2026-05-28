@@ -9,7 +9,6 @@ const isClientActive = (c) => {
   return new Date() <= new Date(c.planEndDate);
 };
 
-// POST /webhook — real Meta webhook
 const handleWebhook = async (req, res) => {
   res.sendStatus(200);
   try {
@@ -27,8 +26,10 @@ const handleWebhook = async (req, res) => {
 
     console.log(`📩 Message from ${phone}: ${message}`);
 
-    // Phone ID se client dhundho
-    const client = await Client.findOne({ "whatsapp.phoneId": phoneNumberId });
+    // Supabase mein findOne nahi — sab clients lo aur filter karo
+    const allClients = await Client.find({});
+    const client = allClients.find(c => c.whatsapp?.phoneId === phoneNumberId);
+
     if (!client || !isClientActive(client)) {
       console.log("❌ Client not found for phoneId:", phoneNumberId);
       return;
@@ -42,7 +43,6 @@ const handleWebhook = async (req, res) => {
 
     if (!result || !result.reply) return;
 
-    // Reply bhejo
     await axios.post(
       `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
       {
@@ -54,14 +54,13 @@ const handleWebhook = async (req, res) => {
       { headers: { Authorization: `Bearer ${client.whatsapp.metaAccessToken}` } }
     );
 
-    console.log(`✅ Reply sent to ${phone}: ${result.reply}`);
+    console.log(`✅ Reply sent to ${phone}`);
 
   } catch (e) {
     console.error("Webhook error:", e.message);
   }
 };
 
-// POST /webhook/simulate — Bot Tester ke liye
 const simulateWebhook = async (req, res) => {
   try {
     const { clientId, phone, message } = req.body;
@@ -89,7 +88,6 @@ const simulateWebhook = async (req, res) => {
   }
 };
 
-// POST /webhook/reset
 const resetWebhook = async (req, res) => {
   try {
     const { clientId, phone } = req.body;
