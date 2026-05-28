@@ -124,7 +124,7 @@ const getOnboardUrl = async (req, res) => {
       `https://www.facebook.com/dialog/oauth?` +
       `client_id=${APP_ID}` +
       `&redirect_uri=${redirectUri}` +
-      `&scope=whatsapp_business_management,whatsapp_business_messaging` +
+      `&scope=whatsapp_business_management,whatsapp_business_messaging,business_management` +
       `&response_type=code` +
       `&state=${clientId}` +
       `&config_id=2152842675495716`;
