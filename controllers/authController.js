@@ -25,21 +25,25 @@ const metaCallback = async (req, res) => {
 
     const accessToken = tokenRes.data.access_token;
 
-    // WABA directly fetch karo
-    const wabaRes = await axios.get(
-      "https://graph.facebook.com/v19.0/me/whatsapp_business_accounts",
+    // Debug token se WABA ID nikalo
+    const debugRes = await axios.get(
+      "https://graph.facebook.com/v19.0/debug_token",
       {
-        params: { fields: "id,name" },
-        headers: { Authorization: `Bearer ${accessToken}` }
+        params: {
+          input_token: accessToken,
+          access_token: `${APP_ID}|${APP_SECRET}`
+        }
       }
     );
 
-    console.log("WABA Response:", JSON.stringify(wabaRes.data));
+    console.log("Debug token data:", JSON.stringify(debugRes.data));
 
-    const wabaId = wabaRes.data?.data?.[0]?.id;
+    const scopes = debugRes.data?.data?.granular_scopes || [];
+    const wabaScope = scopes.find(s => s.scope === "whatsapp_business_management");
+    const wabaId = wabaScope?.target_ids?.[0];
 
     if (!wabaId) {
-      console.error("No WABA found:", wabaRes.data);
+      console.error("No WABA ID in scopes:", scopes);
       return res.status(400).json({ error: "WhatsApp Business Account nahi mila" });
     }
 
@@ -72,7 +76,6 @@ const metaCallback = async (req, res) => {
     res.redirect(`${process.env.FRONTEND_URL}/onboard-error?clientId=${clientId}`);
   }
 };
-
 const getOnboardStatus = async (req, res) => {
   const { clientId } = req.params;
 
