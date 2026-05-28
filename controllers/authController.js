@@ -113,13 +113,7 @@ const getOnboardUrl = async (req, res) => {
 
     const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/auth/meta/callback`);
 
-    const onboardUrl =
-      `https://www.facebook.com/dialog/oauth?` +
-      `client_id=${APP_ID}` +
-      `&redirect_uri=${redirectUri}` +
-      `&scope=whatsapp_business_management,whatsapp_business_messaging` +
-      `&response_type=code` +
-      `&state=${clientId}` +
+    const onboardUrl = `https://www.facebook.com/dialog/oauth?client_id=${APP_ID}&redirect_uri=${redirectUri}&scope=whatsapp_business_management,whatsapp_business_messaging&response_type=code&state=${clientId}`;
 
     res.json({ onboardUrl, clientId });
   } catch (err) {
@@ -127,5 +121,4 @@ const getOnboardUrl = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
-
 module.exports = { metaCallback, getOnboardStatus, getOnboardUrl };
