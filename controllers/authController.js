@@ -5,7 +5,6 @@ const APP_ID = process.env.META_APP_ID;
 const APP_SECRET = process.env.META_APP_SECRET;
 const BACKEND_URL = process.env.BACKEND_URL;
 
-// ✅ Step 1: Meta callback
 const metaCallback = async (req, res) => {
   const { code, state: clientId } = req.query;
 
@@ -14,7 +13,7 @@ const metaCallback = async (req, res) => {
   }
 
   try {
-    // Code ko access token mein exchange karo
+    // Token exchange
     const tokenRes = await axios.get("https://graph.facebook.com/v19.0/oauth/access_token", {
       params: {
         client_id: APP_ID,
@@ -26,23 +25,16 @@ const metaCallback = async (req, res) => {
 
     const accessToken = tokenRes.data.access_token;
 
-    // Business ID fetch karo
-    const bizRes = await axios.get("https://graph.facebook.com/v19.0/me/businesses", {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-
-    const businessId = bizRes.data?.data?.[0]?.id;
-
-    if (!businessId) {
-      console.error("No business found:", bizRes.data);
-      return res.status(400).json({ error: "Facebook Business account nahi mila" });
-    }
-
-    // WABA ID fetch karo business se
+    // WABA directly fetch karo
     const wabaRes = await axios.get(
-      `https://graph.facebook.com/v19.0/${businessId}/owned_whatsapp_business_accounts`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
+      "https://graph.facebook.com/v19.0/me/whatsapp_business_accounts",
+      {
+        params: { fields: "id,name" },
+        headers: { Authorization: `Bearer ${accessToken}` }
+      }
     );
+
+    console.log("WABA Response:", JSON.stringify(wabaRes.data));
 
     const wabaId = wabaRes.data?.data?.[0]?.id;
 
@@ -51,7 +43,7 @@ const metaCallback = async (req, res) => {
       return res.status(400).json({ error: "WhatsApp Business Account nahi mila" });
     }
 
-    // Phone number ID fetch karo
+    // Phone number fetch karo
     const phoneRes = await axios.get(
       `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -81,7 +73,6 @@ const metaCallback = async (req, res) => {
   }
 };
 
-// ✅ Step 2: Status check
 const getOnboardStatus = async (req, res) => {
   const { clientId } = req.params;
 
@@ -110,7 +101,6 @@ const getOnboardStatus = async (req, res) => {
   }
 };
 
-// ✅ Step 3: Onboard URL
 const getOnboardUrl = async (req, res) => {
   const { clientId } = req.params;
 
@@ -124,7 +114,7 @@ const getOnboardUrl = async (req, res) => {
       `https://www.facebook.com/dialog/oauth?` +
       `client_id=${APP_ID}` +
       `&redirect_uri=${redirectUri}` +
-      `&scope=whatsapp_business_management,whatsapp_business_messaging,business_management` +
+      `&scope=whatsapp_business_management,whatsapp_business_messaging` +
       `&response_type=code` +
       `&state=${clientId}` +
       `&config_id=2152842675495716`;
