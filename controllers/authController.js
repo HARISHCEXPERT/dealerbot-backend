@@ -120,7 +120,6 @@ const getOnboardUrl = async (req, res) => {
       `&scope=whatsapp_business_management,whatsapp_business_messaging` +
       `&response_type=code` +
       `&state=${clientId}` +
-      `&config_id=2152842675495716`;
 
     res.json({ onboardUrl, clientId });
   } catch (err) {
