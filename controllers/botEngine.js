@@ -1,48 +1,45 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Anthropic = require("@anthropic-ai/sdk");
 const Session = require("../models/Session");
 const { sendToSheet } = require("../services/googleSheetService");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const buildSystemPrompt = (client) => `
-Tu ${client.name} ka official WhatsApp AI assistant hai.
+const buildSystemPrompt = (dealerClient) => `You are the official WhatsApp AI Assistant for ${dealerClient.name} — a ${dealerClient.brand} dealership in ${dealerClient.city}.
 
 SHOWROOM DETAILS:
-- Brand: ${client.brand}
-- City: ${client.city}
-- Address: ${client.botProfile?.address || "Showroom pe aayein"}
-- Contact: ${client.botProfile?.phone || "Dealer se contact karein"}
-- Timings: ${client.botProfile?.hours || "Mon-Sat 9AM-6PM"}
+- Brand: ${dealerClient.brand}
+- City: ${dealerClient.city}
+- Address: ${dealerClient.botProfile?.address || "Visit our showroom"}
+- Contact: ${dealerClient.botProfile?.phone || "Contact the dealership"}
+- Business Hours: ${dealerClient.botProfile?.hours || "Mon–Sat, 9AM–6PM"}
 
 CURRENT OFFERS:
-${client.botProfile?.offers || "Latest offers ke liye showroom contact karein"}
+${dealerClient.botProfile?.offers || "Please visit or contact us for latest offers"}
 
-EXTRA INFO:
-${client.botProfile?.extraInfo || ""}
+ADDITIONAL INFO:
+${dealerClient.botProfile?.extraInfo || ""}
 
-TERA KAAM:
-- Hinglish mein baat kar — friendly aur professional
-- WhatsApp pe chhote replies do (3-4 lines max)
-- Bike details, pricing, test ride, service booking help karo
-- Hamesha lead lene ki koshish karo — naam aur number
-- Agar koi ready lage toh showroom visit ya callback suggest karo
+YOUR ROLE:
+- Reply in the same language as the customer — English if they write in English, Hinglish otherwise
+- ALWAYS use respectful language — "aap/aapko/aapka" never "tu/tera/tujhe"
+- Keep replies short and clear — 3-4 lines max on WhatsApp
+- Help with: bike details, pricing, test ride booking, service appointments
+- Always try to capture name and phone number — gently and naturally
+- When customer seems ready — suggest showroom visit or callback
+- If asked "Are you AI?" — answer honestly
+- Never give false information
 
-LEAD EXTRACTION — ZAROORI:
-Apni normal reply ke baad HAMESHA yeh JSON likho:
+LEAD EXTRACTION — IMPORTANT:
+After every reply, on a new line add exactly:
 LEADDATA:{"name":"","phone":"","interest":"","score":""}
 
-- name: user ne bataya ho tabhi
-- phone: 10 digit mile tabhi
+Rules:
+- name: fill only if customer mentioned it
+- phone: fill only if customer gave a 10-digit number
 - interest: "Bike Details" / "Service Booking" / "Test Ride" / "Price Inquiry" / "General"
-- score: "hot" / "warm" / "cold"
+- score: "hot" (ready to buy/visit) / "warm" (interested) / "cold" (just browsing)`;
 
-Example:
-Namaste! Splendor Plus ₹74,000 se shuru hoti hai... 😊
-
-LEADDATA:{"name":"","phone":"","interest":"Price Inquiry","score":"warm"}
-`;
-
-const processMessage = async (clientId, phone, message, client) => {
+const processMessage = async (clientId, phone, message, dealerClient) => {
   let session = await Session.findOne({ clientId, phone });
   if (!session) {
     session = Session.build({
@@ -58,17 +55,25 @@ const processMessage = async (clientId, phone, message, client) => {
   session.updatedAt = new Date();
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const history = session.data.history || [];
 
-    const chat = model.startChat({
-      history,
-      systemInstruction: buildSystemPrompt(client)
+    // Claude messages format
+    const claudeMessages = [];
+    for (let i = 0; i < history.length; i++) {
+      const h = history[i];
+      if (h.role === "user") claudeMessages.push({ role: "user", content: h.text });
+      if (h.role === "model") claudeMessages.push({ role: "assistant", content: h.text });
+    }
+    claudeMessages.push({ role: "user", content: message });
+
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 500,
+      system: buildSystemPrompt(dealerClient),
+      messages: claudeMessages
     });
 
-    const result = await chat.sendMessage(message);
-    const fullResponse = result.response.text();
+    const fullResponse = response.content[0].text;
 
     // Reply aur Lead alag karo
     let reply = fullResponse;
@@ -85,8 +90,8 @@ const processMessage = async (clientId, phone, message, client) => {
     }
 
     // History update karo
-    history.push({ role: "user", parts: [{ text: message }] });
-    history.push({ role: "model", parts: [{ text: fullResponse }] });
+    history.push({ role: "user", text: message });
+    history.push({ role: "model", text: fullResponse });
     if (history.length > 20) history.splice(0, 2);
     session.data.history = history;
 
@@ -104,7 +109,7 @@ const processMessage = async (clientId, phone, message, client) => {
         leadData.score === "warm";
 
       if (shouldSave) {
-        sendToSheet(client.googleSheetUrl, {
+        sendToSheet(dealerClient.googleSheetUrl, {
           phone,
           name: session.data.name || "",
           interest: session.data.interest || "General",
@@ -116,11 +121,11 @@ const processMessage = async (clientId, phone, message, client) => {
 
     await session.save();
     return { reply };
+
   } catch (err) {
-    console.error("Gemini error:", err.message);
+    console.error("Claude error:", err.message);
     return {
-      reply:
-        "Thoda technical issue aa gaya 😅 Please thodi der baad try karein ya showroom contact karein."
+      reply: "There seems to be a technical issue 😅 Please try again in a moment or contact the showroom directly."
     };
   }
 };
