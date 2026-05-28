@@ -9,40 +9,59 @@ const isClientActive = (c) => {
   return new Date() <= new Date(c.planEndDate);
 };
 
-// POST /api/webhook — real Meta webhook
+// POST /webhook — real Meta webhook
 const handleWebhook = async (req, res) => {
   res.sendStatus(200);
   try {
-    const { clientId, phone, message } = req.body;
-    if (!clientId || !phone || !message) return;
+    const entry = req.body?.entry?.[0];
+    const change = entry?.changes?.[0]?.value;
+    const messageObj = change?.messages?.[0];
 
-    const client = await Client.findById(clientId);
-    if (!client || !isClientActive(client)) return;
+    if (!messageObj) return;
 
-    const result =
-      client.brand === "Personal"
-        ? await processPersonalMessage(clientId, phone, message, client.googleSheetUrl)
-        : await processMessage(clientId, phone, message, client);
+    const phone = messageObj.from;
+    const message = messageObj.text?.body;
+    const phoneNumberId = change?.metadata?.phone_number_id;
+
+    if (!phone || !message || !phoneNumberId) return;
+
+    console.log(`📩 Message from ${phone}: ${message}`);
+
+    // Phone ID se client dhundho
+    const client = await Client.findOne({ "whatsapp.phoneId": phoneNumberId });
+    if (!client || !isClientActive(client)) {
+      console.log("❌ Client not found for phoneId:", phoneNumberId);
+      return;
+    }
+
+    console.log(`✅ Client found: ${client.name}`);
+
+    const result = client.brand === "Personal"
+      ? await processPersonalMessage(client._id, phone, message, client.googleSheetUrl)
+      : await processMessage(client._id, phone, message, client);
+
     if (!result || !result.reply) return;
 
-    if (client.whatsapp.phoneId !== "MOCK_PHONE_ID") {
-      await axios.post(
-        `https://graph.facebook.com/v18.0/${client.whatsapp.phoneId}/messages`,
-        {
-          messaging_product: "whatsapp",
-          to: phone,
-          type: "text",
-          text: { body: result.reply }
-        },
-        { headers: { Authorization: `Bearer ${client.whatsapp.token}` } }
-      );
-    }
+    // Reply bhejo
+    await axios.post(
+      `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
+      {
+        messaging_product: "whatsapp",
+        to: phone,
+        type: "text",
+        text: { body: result.reply }
+      },
+      { headers: { Authorization: `Bearer ${client.whatsapp.metaAccessToken}` } }
+    );
+
+    console.log(`✅ Reply sent to ${phone}: ${result.reply}`);
+
   } catch (e) {
     console.error("Webhook error:", e.message);
   }
 };
 
-// POST /api/webhook/simulate — Bot Tester ke liye
+// POST /webhook/simulate — Bot Tester ke liye
 const simulateWebhook = async (req, res) => {
   try {
     const { clientId, phone, message } = req.body;
@@ -53,10 +72,9 @@ const simulateWebhook = async (req, res) => {
     const client = await Client.findById(clientId);
     if (!client) return res.status(404).json({ error: "Client not found" });
 
-    const result =
-      client.brand === "Personal"
-        ? await processPersonalMessage(clientId, phone, message, client.googleSheetUrl)
-        : await processMessage(clientId, phone, message, client);
+    const result = client.brand === "Personal"
+      ? await processPersonalMessage(clientId, phone, message, client.googleSheetUrl)
+      : await processMessage(clientId, phone, message, client);
 
     res.json({
       success: true,
@@ -71,7 +89,7 @@ const simulateWebhook = async (req, res) => {
   }
 };
 
-// POST /api/webhook/reset
+// POST /webhook/reset
 const resetWebhook = async (req, res) => {
   try {
     const { clientId, phone } = req.body;
