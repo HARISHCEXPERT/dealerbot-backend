@@ -48,13 +48,17 @@ const metaCallback = async (req, res) => {
     }
 
     // Phone number fetch karo
-    const phoneRes = await axios.get(
-      `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`,
-      { headers: { Authorization: `Bearer ${accessToken}` } }
-    );
+    // Phone number fetch — token se directly
+const phoneRes = await axios.get(
+  `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`,
+  { 
+    params: { fields: "id,display_phone_number,verified_name" },
+    headers: { Authorization: `Bearer ${accessToken}` } 
+  }
+);
 
-    const phoneId = phoneRes.data?.data?.[0]?.id;
-
+console.log("Phone response:", JSON.stringify(phoneRes.data));
+const phoneId = phoneRes.data?.data?.[0]?.id;
     // Client update karo
     const updatedClient = await Client.findByIdAndUpdate(clientId, {
       whatsapp: {
