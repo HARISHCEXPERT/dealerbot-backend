@@ -26,15 +26,12 @@ const metaCallback = async (req, res) => {
     const accessToken = tokenRes.data.access_token;
 
     // Debug token se WABA ID nikalo
-    const debugRes = await axios.get(
-      "https://graph.facebook.com/v19.0/debug_token",
-      {
-        params: {
-          input_token: accessToken,
-          access_token: `${APP_ID}|${APP_SECRET}`
-        }
+    const debugRes = await axios.get("https://graph.facebook.com/v19.0/debug_token", {
+      params: {
+        input_token: accessToken,
+        access_token: `${APP_ID}|${APP_SECRET}`
       }
-    );
+    });
 
     console.log("Debug token data:", JSON.stringify(debugRes.data));
 
@@ -48,17 +45,29 @@ const metaCallback = async (req, res) => {
     }
 
     // Phone number fetch karo
-    // Phone number fetch — token se directly
-const phoneRes = await axios.get(
-  `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`,
-  { 
-    params: { fields: "id,display_phone_number,verified_name" },
-    headers: { Authorization: `Bearer ${accessToken}` } 
-  }
-);
+    const phoneRes = await axios.get(`https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`, {
+      params: { fields: "id,display_phone_number,verified_name" },
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
 
-console.log("Phone response:", JSON.stringify(phoneRes.data));
-const phoneId = phoneRes.data?.data?.[0]?.id;
+    console.log("Phone response:", JSON.stringify(phoneRes.data));
+    const phoneId = phoneRes.data?.data?.[0]?.id;
+
+    // ✅ WABA webhook subscribe karo automatically
+    try {
+      await axios.post(
+        `https://graph.facebook.com/v19.0/${wabaId}/subscribed_apps`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          params: { subscribed_fields: "messages" }
+        }
+      );
+      console.log("✅ WABA webhook subscribed:", wabaId);
+    } catch (subErr) {
+      console.error("Webhook subscribe error:", subErr?.response?.data || subErr.message);
+    }
+
     // Client update karo
     const updatedClient = await Client.findByIdAndUpdate(clientId, {
       whatsapp: {
@@ -80,6 +89,7 @@ const phoneId = phoneRes.data?.data?.[0]?.id;
     res.redirect(`${process.env.FRONTEND_URL}/onboard-error?clientId=${clientId}`);
   }
 };
+
 const getOnboardStatus = async (req, res) => {
   const { clientId } = req.params;
 
@@ -116,7 +126,6 @@ const getOnboardUrl = async (req, res) => {
     if (!client) return res.status(404).json({ error: "Client nahi mila" });
 
     const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/auth/meta/callback`);
-
     const onboardUrl = `https://www.facebook.com/dialog/oauth?client_id=${APP_ID}&redirect_uri=${redirectUri}&scope=whatsapp_business_management,whatsapp_business_messaging&response_type=code&state=${clientId}`;
 
     res.json({ onboardUrl, clientId });
@@ -125,4 +134,5 @@ const getOnboardUrl = async (req, res) => {
     res.status(500).json({ error: "Server error" });
   }
 };
+
 module.exports = { metaCallback, getOnboardStatus, getOnboardUrl };
