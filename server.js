@@ -1,5 +1,3 @@
-// Long-running server entry — use this for local dev, Render, Railway, Fly.io, etc.
-// For Vercel, the entry is api/index.js
 const app = require("./app");
 const startExpiryJob = require("./jobs/expiryJob");
 
@@ -13,5 +11,15 @@ app.listen(PORT, () => {
     console.log("⏰ Expiry cron scheduled");
   } catch (e) {
     console.error("Cron failed:", e.message);
+  }
+
+  // Keep alive — Render free tier ko jagte rakho
+  if (process.env.BACKEND_URL) {
+    setInterval(() => {
+      fetch(`${process.env.BACKEND_URL}/api/health`)
+        .then(() => console.log("🏓 Keep alive"))
+        .catch(() => {});
+    }, 10 * 60 * 1000);
+    console.log("🏓 Keep alive started");
   }
 });
