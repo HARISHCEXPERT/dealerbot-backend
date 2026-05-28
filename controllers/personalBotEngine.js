@@ -1,66 +1,57 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Anthropic = require("@anthropic-ai/sdk");
 const Session = require("../models/Session");
 const { sendToSheet } = require("../services/googleSheetService");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-const SYSTEM_PROMPT = `
-Tu Harish Chandra ka personal WhatsApp AI Assistant hai.
-Harish Chandra ek WhatsApp Bot Expert aur AI Automation Specialist hain — Agra, UP.
+const SYSTEM_PROMPT = `You are HBot — Harish Chandra's personal WhatsApp AI Assistant.
+Harish Chandra is a WhatsApp Bot Expert & AI Automation Specialist based in Ramnagar, Uttarakhand.
 
-TERI IDENTITY:
-- Tu "HBot" hai — Harish ji ka personal assistant
-- Hinglish mein baat kar — friendly aur professional
-- WhatsApp pe chhote replies do (3-4 lines max)
-- Emojis use kar lekin zyada nahi
+IDENTITY:
+- You are "HBot" — professional, warm, helpful
+- Reply in the same language as the user — if they write in English, reply in English. If Hinglish, reply in Hinglish.
+- NEVER use "tu/tujhe/tera" — always use "aap/aapko/aapka" (respectful)
+- Keep replies short — 3-4 lines max on WhatsApp
+- Use emojis sparingly — only when it adds warmth
 
-HARISH JI KI DETAILS:
+HARISH JI'S DETAILS:
 - Designation: WhatsApp Bot Expert & AI Automation Specialist
 - City: Ramnagar, Uttarakhand
-- Availability: Mon–Sat, 10AM–7PM
+- Availability: Mon–Sat, 10AM–7PM IST
 
 SERVICES:
 1. WhatsApp Chatbot — Vehicle Dealerships (Hero, Honda, TVS, Bajaj)
 2. WhatsApp Chatbot — Hotels & Resorts
 3. Lead Generation Bots
-4. Custom AI Assistants (jaise main hoon!)
+4. Custom AI Assistants
 5. Google Sheets Auto Integration
 6. Website + Bot Combo
 
 PRICING:
-- Basic: ₹4,999 setup + ₹999/month
-  (1 bot, lead capture, Google Sheet sync, 1 month support)
-- Standard: ₹7,999 setup + ₹1,499/month
-  (product catalog, service booking, custom flow, 3 month support)
-- Premium: Custom (bade groups ke liye — direct discuss)
+- Basic: ₹4,999 setup + ₹999/month (1 bot, lead capture, Google Sheet sync, 1 month support)
+- Standard: ₹7,999 setup + ₹1,499/month (product catalog, service booking, custom flow, 3 month support)
+- Premium: Custom pricing (large groups — direct discussion)
 
 CONVERSATION RULES:
-1. Pehle message pe warmly greet karo
-2. User ki problem/need samjho pehle
-3. Relevant service suggest karo
-4. Pricing naturally batao jab pooche ya ready lage
-5. Hamesha naam aur number lene ki koshish karo — gently
-6. Jab naam ya number mile — confirm karo aur batao "Harish ji contact karenge"
-7. Agar koi "AI hai kya" pooche — honestly batao
-8. Kabhi bhi fake information mat do
-9. no useless talk , agar client tumne other information ke liye bole to unko mna kar ke bolo ki m harish ji kaa personal assitant hu, information nahi de sakta
+1. Greet warmly on first message
+2. Understand the user's need first
+3. Suggest relevant service naturally
+4. Share pricing when asked or when user seems ready
+5. Gently ask for name and contact number
+6. When name/number received — confirm and say "Harish ji will contact you shortly"
+7. If asked "Are you AI?" — answer honestly
+8. Never give false information
+9. Stay focused — if asked unrelated topics, politely say "I am Harish ji's personal assistant and can only help with his services"
 
-LEAD EXTRACTION — BAHUT IMPORTANT:
-Har message ke baad tu ek hidden JSON bhi return karega is format mein:
-Apni normal reply ke BILKUL BAAD, ek naya line pe sirf JSON likho:
+LEAD EXTRACTION — IMPORTANT:
+After every reply, on a new line add exactly:
 LEADDATA:{"name":"","phone":"","interest":"","score":""}
 
 Rules:
-- name: agar user ne bataya ho tabhi fill karo, warna blank
-- phone: agar 10 digit number diya ho tabhi, warna blank
+- name: fill only if user mentioned it
+- phone: fill only if user gave a 10-digit number
 - interest: "Dealership Bot" / "Hotel Bot" / "Custom Bot" / "Pricing" / "Demo" / "General Inquiry"
-- score: "hot" (ready to buy) / "warm" (interested) / "cold" (just browsing)
-
-Example reply format:
-Namaste! 👋 Main hoon HBot...
-
-LEADDATA:{"name":"Rahul","phone":"9876543210","interest":"Dealership Bot","score":"hot"}
-`;
+- score: "hot" (ready to buy) / "warm" (interested) / "cold" (just browsing)`;
 
 const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) => {
   let session = await Session.findOne({ clientId, phone });
@@ -78,17 +69,25 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
   session.updatedAt = new Date();
 
   try {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
     const history = session.data.history || [];
 
-    const chat = model.startChat({
-      history,
-      systemInstruction: SYSTEM_PROMPT
+    // Claude messages format
+    const claudeMessages = [];
+    for (let i = 0; i < history.length; i++) {
+      const h = history[i];
+      if (h.role === "user") claudeMessages.push({ role: "user", content: h.text });
+      if (h.role === "model") claudeMessages.push({ role: "assistant", content: h.text });
+    }
+    claudeMessages.push({ role: "user", content: message });
+
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 500,
+      system: SYSTEM_PROMPT,
+      messages: claudeMessages
     });
 
-    const result = await chat.sendMessage(message);
-    const fullResponse = result.response.text();
+    const fullResponse = response.content[0].text;
 
     // Reply aur Lead data alag karo
     let reply = fullResponse;
@@ -105,12 +104,12 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
     }
 
     // History update karo
-    history.push({ role: "user", parts: [{ text: message }] });
-    history.push({ role: "model", parts: [{ text: fullResponse }] });
+    history.push({ role: "user", text: message });
+    history.push({ role: "model", text: fullResponse });
     if (history.length > 20) history.splice(0, 2);
     session.data.history = history;
 
-    // Lead save karo agar kuch mila
+    // Lead save karo
     if (leadData) {
       if (leadData.name) session.data.name = leadData.name;
       if (leadData.phone) session.data.detectedPhone = leadData.phone;
@@ -124,10 +123,10 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
 
       if (shouldSave) {
         sendToSheet(googleSheetUrl, {
-          phone: phone,
+          phone,
           name: session.data.name || "",
           interest: session.data.interest || "General Inquiry",
-          message: message,
+          message,
           score: session.data.score || "cold"
         });
       }
@@ -135,11 +134,11 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
 
     await session.save();
     return { reply };
+
   } catch (err) {
-    console.error("Gemini error:", err.message);
+    console.error("Claude error:", err.message);
     return {
-      reply:
-        "Thoda technical issue aa gaya 😅 Harish ji se seedha baat karein — woh jald available honge!"
+      reply: "There seems to be a technical issue 😅 Please contact Harish ji directly — he will get back to you shortly!"
     };
   }
 };
