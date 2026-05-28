@@ -1,34 +1,33 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const Anthropic = require("@anthropic-ai/sdk");
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-
-const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const getAIReply = async (messages, contextData = {}) => {
   try {
-    const prompt = `
-You are a smart WhatsApp sales assistant for a bike showroom.
+    const systemPrompt = `You are a smart WhatsApp sales assistant for a vehicle dealership.
 
 Rules:
-- Reply in Hinglish
-- Be short and friendly
-- Help user choose bike or book service
-- Use given context if available
+- Reply in Hinglish (mix of Hindi and English)
+- Be short, friendly and helpful — max 2-3 lines
+- Help user choose bike, check price, book test ride or service
+- Use given dealership context if available
+- Never reveal you are an AI unless directly asked
 
-Context:
-${JSON.stringify(contextData)}
+Dealership Context:
+${JSON.stringify(contextData)}`;
 
-Conversation:
-${messages.join("\n")}
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 300,
+      system: systemPrompt,
+      messages: [
+        { role: "user", content: messages.join("\n") }
+      ]
+    });
 
-Reply:
-`;
-
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    return response.text();
+    return response.content[0].text;
   } catch (err) {
-    console.error("Gemini Error:", err.message);
+    console.error("Claude Error:", err.message);
     return "Thoda issue aa gaya hai, please dubara try karein 🙏";
   }
 };
