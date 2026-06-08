@@ -8,6 +8,7 @@ const webhookRoutes = require("./routes/webhookRoutes");
 const leadRoutes = require("./routes/leadRoutes");
 const productRoutes = require("./routes/productRoutes");
 const handoffRoutes = require("./routes/handoffRoutes");
+const conversationRoutes = require("./routes/conversationRoutes");
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.use("/api", webhookRoutes);
 app.use("/api", leadRoutes);
 app.use("/api", productRoutes);
 app.use("/api", handoffRoutes);
+app.use("/api", conversationRoutes);
 
 // ---- Health ----
 app.get("/", (req, res) => {
