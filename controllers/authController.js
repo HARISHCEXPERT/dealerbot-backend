@@ -1,152 +1,82 @@
-const bcrypt = require("bcryptjs");
-const User = require("../models/User");
-const { signToken } = require("../middleware/auth");
-const { sendOtpEmail } = require("../services/emailService");
+const axios = require("axios");
+const Client = require("../models/Client");
 
-const login = async (req, res) => {
+const APP_ID = process.env.META_APP_ID;
+const APP_SECRET = process.env.META_APP_SECRET;
+const BACKEND_URL = process.env.BACKEND_URL;
+
+const metaCallback = async (req, res) => {
+  const { code, state: clientId } = req.query;
+  if (!code || !clientId) return res.status(400).json({ error: "code and clientId required" });
+
   try {
-    const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email aur password chahiye" });
-
-    const row = await User.findByEmail(email);
-    if (!row) return res.status(401).json({ error: "Email ya password galat hai" });
-
-    const ok = await bcrypt.compare(password, row.password_hash || "");
-    if (!ok) return res.status(401).json({ error: "Email ya password galat hai" });
-
-    const user = User.fromRow(row);
-    const token = signToken(user);
-    res.json({ user, token });
-  } catch (e) {
-    console.error("Login error:", e); // FULL stack trace
-    res.status(500).json({ error: "Server error" });
-  }
-};
-
-const forgotPassword = async (req, res) => {
-  try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email chahiye" });
-
-    const row = await User.findByEmail(email);
-    if (!row) return res.json({ message: "Agar account hai toh OTP bhej diya gaya" });
-
-    const otp = String(Math.floor(100000 + Math.random() * 900000));
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-    await User.setOtp(row.id, otp, expiresAt);
-    await sendOtpEmail(row.email, otp);
-
-    res.json({ message: "OTP bhej diya gaya" });
-  } catch (e) {
-    console.error("Forgot error:", e.message);
-    res.status(500).json({ error: "Server error" });
-  }
-};
-
-const resetPassword = async (req, res) => {
-  try {
-    const { email, otp, newPassword } = req.body;
-    if (!email || !otp || !newPassword) {
-      return res.status(400).json({ error: "Email, OTP aur new password chahiye" });
-    }
-    if (newPassword.length < 6) {
-      return res.status(400).json({ error: "Password kam se kam 6 character ka hona chahiye" });
-    }
-
-    const row = await User.findByEmail(email);
-    if (!row) return res.status(400).json({ error: "Invalid OTP" });
-
-    if (!row.otp || row.otp !== otp) return res.status(400).json({ error: "Invalid OTP" });
-    if (!row.otp_expires_at || new Date(row.otp_expires_at) < new Date()) {
-      return res.status(400).json({ error: "OTP expire ho gaya. Naya OTP request karein." });
-    }
-
-    const hash = await bcrypt.hash(newPassword, 10);
-    await User.updatePassword(row.id, hash);
-
-    res.json({ message: "Password reset ho gaya" });
-  } catch (e) {
-    console.error("Reset error:", e.message);
-    res.status(500).json({ error: "Server error" });
-  }
-};
-
-const listUsers = async (req, res) => {
-  try {
-    const users = await User.findAll();
-    res.json(users);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-};
-
-const createUser = async (req, res) => {
-  try {
-    const { email, password, role, clientId } = req.body;
-    if (!email || !password) return res.status(400).json({ error: "Email aur password chahiye" });
-    if (password.length < 6) return res.status(400).json({ error: "Password kam se kam 6 character" });
-
-    const existing = await User.findByEmail(email);
-    if (existing) return res.status(400).json({ error: "Email already registered" });
-
-    const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      email: email.toLowerCase().trim(),
-      passwordHash: hash,
-      role: role === "admin" ? "admin" : "client",
-      clientId: clientId || null
+    const tokenRes = await axios.get("https://graph.facebook.com/v19.0/oauth/access_token", {
+      params: { client_id: APP_ID, client_secret: APP_SECRET, code, redirect_uri: `${BACKEND_URL}/api/auth/meta/callback` }
     });
-    res.status(201).json({ message: "User created", user });
-  } catch (e) {
-    console.error("Create user error:", e.message);
-    res.status(500).json({ error: e.message });
-  }
-};
+    const accessToken = tokenRes.data.access_token;
 
-const deleteUser = async (req, res) => {
-  try {
-    if (req.user && req.user.id === req.params.id) {
-      return res.status(400).json({ error: "Apna account khud delete nahi kar sakte" });
+    const debugRes = await axios.get("https://graph.facebook.com/v19.0/debug_token", {
+      params: { input_token: accessToken, access_token: `${APP_ID}|${APP_SECRET}` }
+    });
+
+    const scopes = debugRes.data?.data?.granular_scopes || [];
+    const wabaScope = scopes.find(s => s.scope === "whatsapp_business_management");
+    const wabaId = wabaScope?.target_ids?.[0];
+    if (!wabaId) return res.status(400).json({ error: "WhatsApp Business Account not found" });
+
+    const phoneRes = await axios.get(`https://graph.facebook.com/v19.0/${wabaId}/phone_numbers`, {
+      params: { fields: "id,display_phone_number,verified_name" },
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const phoneId = phoneRes.data?.data?.[0]?.id;
+
+    try {
+      await axios.post(`https://graph.facebook.com/v19.0/${wabaId}/subscribed_apps`, {}, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params: { subscribed_fields: "messages" }
+      });
+    } catch (subErr) {
+      console.error("Webhook subscribe error:", subErr?.response?.data || subErr.message);
     }
-    await User.deleteById(req.params.id);
-    res.json({ message: "Deleted" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+
+    const updatedClient = await Client.findByIdAndUpdate(clientId, {
+      whatsapp: { metaAccessToken: accessToken, wabaId, phoneId: phoneId || "PENDING" },
+      isActive: true
+    });
+    if (!updatedClient) return res.status(404).json({ error: "Client not found" });
+
+    res.redirect(`${process.env.FRONTEND_URL}/onboard-success?clientId=${clientId}`);
+  } catch (err) {
+    console.error("Meta callback error:", err?.response?.data || err.message);
+    res.redirect(`${process.env.FRONTEND_URL}/onboard-error?clientId=${clientId}`);
   }
 };
 
-const adminResetPassword = async (req, res) => {
+const getOnboardStatus = async (req, res) => {
+  const { clientId } = req.params;
   try {
-    const { userId, newPassword } = req.body;
-    if (!userId || !newPassword) return res.status(400).json({ error: "userId aur newPassword chahiye" });
-    if (newPassword.length < 6) return res.status(400).json({ error: "Min 6 chars" });
+    const client = await Client.findById(clientId);
+    if (!client) return res.status(404).json({ error: "Client not found" });
 
-    const hash = await bcrypt.hash(newPassword, 10);
-    await User.updatePassword(userId, hash);
-    res.json({ message: "Password reset ho gaya" });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    const isOnboarded = !!(client.whatsapp?.wabaId && client.whatsapp?.phoneId && client.whatsapp?.phoneId !== "MOCK_PHONE_ID");
+    res.json({ clientId: client._id, name: client.name, brand: client.brand, isOnboarded, wabaId: client.whatsapp?.wabaId || null, phoneId: client.whatsapp?.phoneId || null, isActive: client.isActive });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
 };
 
-const me = async (req, res) => {
+const getOnboardUrl = async (req, res) => {
+  const { clientId } = req.params;
   try {
-    const user = await User.findById(req.user.id);
-    if (!user) return res.status(404).json({ error: "Not found" });
-    res.json(user);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    const client = await Client.findById(clientId);
+    if (!client) return res.status(404).json({ error: "Client not found" });
+
+    const redirectUri = encodeURIComponent(`${BACKEND_URL}/api/auth/meta/callback`);
+    const onboardUrl = `https://www.facebook.com/dialog/oauth?client_id=${APP_ID}&redirect_uri=${redirectUri}&scope=whatsapp_business_management,whatsapp_business_messaging&response_type=code&state=${clientId}`;
+    res.json({ onboardUrl, clientId });
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
   }
 };
 
-module.exports = {
-  login,
-  forgotPassword,
-  resetPassword,
-  listUsers,
-  createUser,
-  deleteUser,
-  adminResetPassword,
-  me
-};
+module.exports = { metaCallback, getOnboardStatus, getOnboardUrl };
