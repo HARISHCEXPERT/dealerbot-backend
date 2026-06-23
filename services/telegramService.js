@@ -1,4 +1,5 @@
 const TELEGRAM_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const fetch = require("node-fetch");
 
 // Generic send — tumhara number ya client ka chat ID
 const sendTelegramAlert = async (message, chatId) => {
