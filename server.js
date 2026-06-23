@@ -1,3 +1,4 @@
+const fetch = require("node-fetch");
 const app = require("./app");
 const startExpiryJob = require("./jobs/expiryJob");
 
