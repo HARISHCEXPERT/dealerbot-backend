@@ -38,7 +38,7 @@ const handleWebhook = async (req, res) => {
     console.log(`✅ Client found: ${client.name}`);
 
     const result = client.brand === "Personal"
-      ? await processPersonalMessage(client._id, phone, message, client.googleSheetUrl)
+      ? await processPersonalMessage(clientId, phone, message, client)
       : await processMessage(client._id, phone, message, client);
 
     if (!result || !result.reply) return;
@@ -72,7 +72,7 @@ const simulateWebhook = async (req, res) => {
     if (!client) return res.status(404).json({ error: "Client not found" });
 
     const result = client.brand === "Personal"
-      ? await processPersonalMessage(clientId, phone, message, client.googleSheetUrl)
+      ? await processPersonalMessage(client._id, phone, message, client)
       : await processMessage(clientId, phone, message, client);
 
     res.json({

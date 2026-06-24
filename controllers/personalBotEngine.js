@@ -1,6 +1,6 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const Session = require("../models/Session");
-const { sendToSheet } = require("../services/googleSheetService");
+const { saveLead } = require("../services/leadService");
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -53,7 +53,7 @@ Rules:
 - interest: "Dealership Bot" / "Hotel Bot" / "Custom Bot" / "Pricing" / "Demo" / "General Inquiry"
 - score: "hot" (ready to buy) / "warm" (interested) / "cold" (just browsing)`;
 
-const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) => {
+const processPersonalMessage = async (clientId, phone, message, dealerClient) => {
   let session = await Session.findOne({ clientId, phone });
   if (!session) {
     session = Session.build({
@@ -71,7 +71,6 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
   try {
     const history = session.data.history || [];
 
-    // Claude messages format
     const claudeMessages = [];
     for (let i = 0; i < history.length; i++) {
       const h = history[i];
@@ -89,7 +88,6 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
 
     const fullResponse = response.content[0].text;
 
-    // Reply aur Lead data alag karo
     let reply = fullResponse;
     let leadData = null;
 
@@ -103,13 +101,11 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
       }
     }
 
-    // History update karo
     history.push({ role: "user", text: message });
     history.push({ role: "model", text: fullResponse });
     if (history.length > 20) history.splice(0, 2);
     session.data.history = history;
 
-    // Lead save karo
     if (leadData) {
       if (leadData.name) session.data.name = leadData.name;
       if (leadData.phone) session.data.detectedPhone = leadData.phone;
@@ -122,13 +118,12 @@ const processPersonalMessage = async (clientId, phone, message, googleSheetUrl) 
         leadData.score === "hot";
 
       if (shouldSave) {
-        sendToSheet(googleSheetUrl, {
+        await saveLead(
+          dealerClient,
           phone,
-          name: session.data.name || "",
-          interest: session.data.interest || "General Inquiry",
-          message,
-          score: session.data.score || "cold"
-        });
+          session.data.interest || "General Inquiry",
+          session.messages
+        );
       }
     }
 
