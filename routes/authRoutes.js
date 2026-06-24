@@ -6,6 +6,7 @@ const {
 } = require("../controllers/authController");
 const {
   login,
+  signup,
   forgotPassword,
   resetPassword,
   listUsers,
@@ -17,15 +18,15 @@ const {
 const { requireAuth, requireAdmin } = require("../middleware/auth");
 
 // ---- Public ----
+router.post("/auth/signup", signup);
 router.post("/auth/login", login);
 router.post("/auth/forgot-password", forgotPassword);
 router.post("/auth/reset-password", resetPassword);
-router.post("/auth/signup", signup);
 
 // ---- Authenticated ----
 router.get("/auth/me", requireAuth, me);
 
-// ---- Admin only — user management ----
+// ---- Admin only ----
 router.get("/auth/users", requireAuth, requireAdmin, listUsers);
 router.post("/auth/create-user", requireAuth, requireAdmin, createUser);
 router.delete("/auth/user/:id", requireAuth, requireAdmin, deleteUser);
