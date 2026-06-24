@@ -1,5 +1,6 @@
 const bcrypt = require("bcryptjs");
 const User = require("../models/User");
+const Client = require("../models/Client");
 const { signToken } = require("../middleware/auth");
 const { sendOtpEmail } = require("../services/emailService");
 
@@ -17,6 +18,42 @@ const login = async (req, res) => {
   } catch (e) {
     console.error("Login error:", e);
     res.status(500).json({ error: "Server error" });
+  }
+};
+
+const signup = async (req, res) => {
+  try {
+    const { email, password, businessName, brand, city } = req.body;
+    if (!email || !password || !businessName || !brand) {
+      return res.status(400).json({ error: "Email, password, business name and brand are required" });
+    }
+    if (password.length < 6) return res.status(400).json({ error: "Password must be at least 6 characters" });
+
+    const existing = await User.findByEmail(email);
+    if (existing) return res.status(400).json({ error: "Email already registered" });
+
+    // Client banao
+    const client = await Client.create({
+      name: businessName,
+      brand,
+      city: city || "",
+      overrideActive: true,
+    });
+
+    // User banao
+    const hash = await bcrypt.hash(password, 10);
+    const user = await User.create({
+      email: email.toLowerCase().trim(),
+      passwordHash: hash,
+      role: "client",
+      clientId: client.id
+    });
+
+    const token = signToken(user);
+    res.status(201).json({ message: "Account created!", user, token });
+  } catch (e) {
+    console.error("Signup error:", e.message);
+    res.status(500).json({ error: e.message });
   }
 };
 
@@ -118,4 +155,4 @@ const me = async (req, res) => {
   }
 };
 
-module.exports = { login, forgotPassword, resetPassword, listUsers, createUser, deleteUser, adminResetPassword, me };
+module.exports = { login, signup, forgotPassword, resetPassword, listUsers, createUser, deleteUser, adminResetPassword, me };

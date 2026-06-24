@@ -20,6 +20,7 @@ const { requireAuth, requireAdmin } = require("../middleware/auth");
 router.post("/auth/login", login);
 router.post("/auth/forgot-password", forgotPassword);
 router.post("/auth/reset-password", resetPassword);
+router.post("/auth/signup", signup);
 
 // ---- Authenticated ----
 router.get("/auth/me", requireAuth, me);
