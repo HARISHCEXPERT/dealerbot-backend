@@ -124,13 +124,23 @@ const Lead = {
     return count || 0;
   },
 
-  /** Return rows since a date for daily aggregation */
   async findSince(sinceISO, extraFilter = {}) {
     let q = supabase.from(TABLE).select("id, created_at, score, status, interest, client_id");
     q = q.gte("created_at", sinceISO);
     if (extraFilter.clientId) q = q.eq("client_id", extraFilter.clientId);
     q = q.order("created_at", { ascending: true });
     const { data, error } = await q;
+    if (error) throw error;
+    return data || [];
+  },
+
+  async findTodayByClient(clientId, todayDate) {
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select("id, score, interest, phone")
+      .eq("client_id", String(clientId))
+      .gte("created_at", todayDate.toISOString())
+      .order("created_at", { ascending: false });
     if (error) throw error;
     return data || [];
   }
