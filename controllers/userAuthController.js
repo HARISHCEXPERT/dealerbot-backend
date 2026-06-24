@@ -37,7 +37,7 @@ const signup = async (req, res) => {
       name: businessName,
       brand,
       city: city || "",
-      overrideActive: true,
+      overrideActive: false,
     });
 
     // User banao
