@@ -2,6 +2,7 @@ const Lead = require("../models/Lead");
 const { scoreLead } = require("./leadScoring");
 const { sendToSheet } = require("./googleSheetService");
 const { sendTelegramAlert } = require("./telegramService");
+const { sendLeadAlert } = require("./emailService");
 
 const saveLead = async (client, phone, interest, messages) => {
   const score = scoreLead(messages);
@@ -13,9 +14,10 @@ const saveLead = async (client, phone, interest, messages) => {
 
   sendToSheet(client.googleSheetUrl, { phone, interest, score });
 
-  // Telegram alert — client ka chat ID use karo, fallback tumhara
-  const telegramChatId = client.bot_profile?.telegramChatId || null;
   const emoji = score === "hot" ? "🔥" : score === "warm" ? "🌡" : "❄️";
+
+  // Telegram alert
+  const telegramChatId = client.notifications?.telegram?.chatId || null;
   await sendTelegramAlert(
     `${emoji} <b>New Lead — ${client.name}</b>\n\n` +
     `📱 Phone: <code>${phone}</code>\n` +
@@ -23,6 +25,17 @@ const saveLead = async (client, phone, interest, messages) => {
     `📊 Score: ${score.toUpperCase()}`,
     telegramChatId
   );
+
+  // Email alert
+  const emailTo = client.notifications?.email || null;
+  if (emailTo) {
+    await sendLeadAlert(emailTo, {
+      clientName: client.name,
+      phone,
+      interest,
+      score
+    });
+  }
 
   return lead;
 };
