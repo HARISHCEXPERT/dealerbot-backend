@@ -26,7 +26,6 @@ const handleWebhook = async (req, res) => {
 
     console.log(`📩 Message from ${phone}: ${message}`);
 
-    // Supabase mein findOne nahi — sab clients lo aur filter karo
     const allClients = await Client.find({});
     const client = allClients.find(c => c.whatsapp?.phoneId === phoneNumberId);
 
@@ -38,7 +37,7 @@ const handleWebhook = async (req, res) => {
     console.log(`✅ Client found: ${client.name}`);
 
     const result = client.brand === "Personal"
-      ? await processPersonalMessage(clientId, phone, message, client)
+      ? await processPersonalMessage(client._id, phone, message, client)
       : await processMessage(client._id, phone, message, client);
 
     if (!result || !result.reply) return;
@@ -73,7 +72,7 @@ const simulateWebhook = async (req, res) => {
 
     const result = client.brand === "Personal"
       ? await processPersonalMessage(client._id, phone, message, client)
-      : await processMessage(clientId, phone, message, client);
+      : await processMessage(client._id, phone, message, client);
 
     res.json({
       success: true,
