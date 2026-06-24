@@ -9,6 +9,8 @@ const leadRoutes = require("./routes/leadRoutes");
 const productRoutes = require("./routes/productRoutes");
 const handoffRoutes = require("./routes/handoffRoutes");
 const conversationRoutes = require("./routes/conversationRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+
 
 const app = express();
 
@@ -45,6 +47,8 @@ app.use("/api", leadRoutes);
 app.use("/api", productRoutes);
 app.use("/api", handoffRoutes);
 app.use("/api", conversationRoutes);
+app.use("/api", paymentRoutes);
+
 
 // ---- Health ----
 app.get("/", (req, res) => {
