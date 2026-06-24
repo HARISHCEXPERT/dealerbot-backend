@@ -1,6 +1,6 @@
 const Anthropic = require("@anthropic-ai/sdk");
 const Session = require("../models/Session");
-const { sendToSheet } = require("../services/googleSheetService");
+const { saveLead } = require("../services/leadService");
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -57,7 +57,6 @@ const processMessage = async (clientId, phone, message, dealerClient) => {
   try {
     const history = session.data.history || [];
 
-    // Claude messages format
     const claudeMessages = [];
     for (let i = 0; i < history.length; i++) {
       const h = history[i];
@@ -75,7 +74,6 @@ const processMessage = async (clientId, phone, message, dealerClient) => {
 
     const fullResponse = response.content[0].text;
 
-    // Reply aur Lead alag karo
     let reply = fullResponse;
     let leadData = null;
 
@@ -89,13 +87,11 @@ const processMessage = async (clientId, phone, message, dealerClient) => {
       }
     }
 
-    // History update karo
     history.push({ role: "user", text: message });
     history.push({ role: "model", text: fullResponse });
     if (history.length > 20) history.splice(0, 2);
     session.data.history = history;
 
-    // Lead save karo
     if (leadData) {
       if (leadData.name) session.data.name = leadData.name;
       if (leadData.phone) session.data.detectedPhone = leadData.phone;
@@ -109,13 +105,12 @@ const processMessage = async (clientId, phone, message, dealerClient) => {
         leadData.score === "warm";
 
       if (shouldSave) {
-        sendToSheet(dealerClient.googleSheetUrl, {
+        await saveLead(
+          dealerClient,
           phone,
-          name: session.data.name || "",
-          interest: session.data.interest || "General",
-          message,
-          score: session.data.score || "cold"
-        });
+          session.data.interest || "General",
+          session.messages
+        );
       }
     }
 
