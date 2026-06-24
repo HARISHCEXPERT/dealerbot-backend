@@ -12,7 +12,7 @@ const { requireAuth, requireAdmin } = require("../middleware/auth");
 router.get("/clients", requireAuth, getClients);
 router.post("/client", requireAuth, requireAdmin, addClient);
 router.get("/client/:id", requireAuth, getClientById);
-router.put("/client/:id", requireAuth, requireAdmin, updateClient);
+router.put("/client/:id", requireAuth, updateClient);
 router.delete("/client/:id", requireAuth, requireAdmin, deleteClient);
 
 module.exports = router;
