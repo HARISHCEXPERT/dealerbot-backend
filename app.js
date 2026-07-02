@@ -1,6 +1,9 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+import WidgetDocs from "./pages/WidgetDocs";
+<Route path="/widget" element={<WidgetDocs />} />
+
 
 const authRoutes = require("./routes/authRoutes");
 const clientRoutes = require("./routes/clientRoutes");
@@ -11,6 +14,7 @@ const handoffRoutes = require("./routes/handoffRoutes");
 const conversationRoutes = require("./routes/conversationRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const widgetRoutes = require("./routes/widgetRoutes");
+
 
 
 
