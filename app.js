@@ -10,6 +10,8 @@ const productRoutes = require("./routes/productRoutes");
 const handoffRoutes = require("./routes/handoffRoutes");
 const conversationRoutes = require("./routes/conversationRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const widgetRoutes = require("./routes/widgetRoutes");
+
 
 
 const app = express();
@@ -48,6 +50,7 @@ app.use("/api", productRoutes);
 app.use("/api", handoffRoutes);
 app.use("/api", conversationRoutes);
 app.use("/api", paymentRoutes);
+app.use("/api", widgetRoutes);
 
 
 // ---- Health ----
