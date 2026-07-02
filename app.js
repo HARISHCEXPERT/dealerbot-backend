@@ -1,5 +1,7 @@
 require("dotenv").config();
 const express = require("express");
+const widgetRoutes = require("./routes/widgetRoutes");
+
 const cors = require("cors");
 
 
@@ -11,7 +13,6 @@ const productRoutes = require("./routes/productRoutes");
 const handoffRoutes = require("./routes/handoffRoutes");
 const conversationRoutes = require("./routes/conversationRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
-const widgetRoutes = require("./routes/widgetRoutes");
 
 
 
