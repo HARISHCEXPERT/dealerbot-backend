@@ -1,10 +1,8 @@
 require("dotenv").config();
 const express = require("express");
-const widgetRoutes = require("./routes/widgetRoutes");
-
 const cors = require("cors");
 
-
+const widgetRoutes = require("./routes/widgetRoutes");
 const authRoutes = require("./routes/authRoutes");
 const clientRoutes = require("./routes/clientRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
@@ -13,9 +11,6 @@ const productRoutes = require("./routes/productRoutes");
 const handoffRoutes = require("./routes/handoffRoutes");
 const conversationRoutes = require("./routes/conversationRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
-
-
-
 
 const app = express();
 
@@ -44,6 +39,9 @@ app.get(["/webhook", "/api/webhook"], (req, res) => {
   return res.sendStatus(403);
 });
 
+// ---- Widget routes — open CORS (kisi bhi website se call hoga) ----
+app.use("/api/widget", cors({ origin: true }));
+
 // ---- API routes ----
 app.use("/api", authRoutes);
 app.use("/api", clientRoutes);
@@ -54,7 +52,6 @@ app.use("/api", handoffRoutes);
 app.use("/api", conversationRoutes);
 app.use("/api", paymentRoutes);
 app.use("/api", widgetRoutes);
-
 
 // ---- Health ----
 app.get("/", (req, res) => {
