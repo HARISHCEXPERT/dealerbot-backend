@@ -1,8 +1,6 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-import WidgetDocs from "./pages/WidgetDocs";
-<Route path="/widget" element={<WidgetDocs />} />
 
 
 const authRoutes = require("./routes/authRoutes");
