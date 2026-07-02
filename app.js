@@ -14,6 +14,12 @@ const paymentRoutes = require("./routes/paymentRoutes");
 
 const app = express();
 
+app.use(express.json({ limit: "1mb" }));
+
+// ---- Widget routes — open CORS (global CORS se PEHLE) ----
+app.use("/api/widget", cors({ origin: true }));
+
+// ---- Global CORS — frontend only ----
 const FRONTEND_URL = process.env.FRONTEND_URL || "*";
 app.use(
   cors({
@@ -21,12 +27,10 @@ app.use(
     credentials: true
   })
 );
-app.use(express.json({ limit: "1mb" }));
 
 // ---- Meta WhatsApp webhook verification ----
 const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN || "token123";
 
-// Both /webhook and /api/webhook GET — verify karo
 app.get(["/webhook", "/api/webhook"], (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
@@ -39,10 +43,8 @@ app.get(["/webhook", "/api/webhook"], (req, res) => {
   return res.sendStatus(403);
 });
 
-// ---- Widget routes — open CORS (kisi bhi website se call hoga) ----
-app.use("/api/widget", cors({ origin: true }));
-
 // ---- API routes ----
+app.use("/api", widgetRoutes);
 app.use("/api", authRoutes);
 app.use("/api", clientRoutes);
 app.use("/api", webhookRoutes);
@@ -51,7 +53,6 @@ app.use("/api", productRoutes);
 app.use("/api", handoffRoutes);
 app.use("/api", conversationRoutes);
 app.use("/api", paymentRoutes);
-app.use("/api", widgetRoutes);
 
 // ---- Health ----
 app.get("/", (req, res) => {
